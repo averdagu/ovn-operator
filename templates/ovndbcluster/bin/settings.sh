@@ -41,7 +41,7 @@ if [[ "$(hostname)" == "{{ .SERVICE_NAME }}-0" ]]; then
 
 {{- if .TLS }}
     ovn-${DB_TYPE}ctl --no-leader-only set-ssl {{.OVNDB_KEY_PATH}} {{.OVNDB_CERT_PATH}} {{.OVNDB_CACERT_PATH}}
-    ovn-${DB_TYPE}ctl --no-leader-only set-connection ${DB_SCHEME}:${DB_PORT}:0.0.0.0
+    ovn-${DB_TYPE}ctl --no-leader-only set-connection ${DB_SCHEME}:${DB_PORT}:${DB_ADDR}
 {{- end }}
 
     while [ "$(ovn-${DB_TYPE}ctl --no-leader-only get connection . inactivity_probe)" != "{{ .OVN_INACTIVITY_PROBE }}" ]; do
