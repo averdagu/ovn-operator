@@ -39,6 +39,7 @@ import (
 
 	infranetworkv1 "github.com/openstack-k8s-operators/infra-operator/apis/network/v1beta1"
 	"github.com/openstack-k8s-operators/lib-common/modules/common"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/clusterdns"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/configmap"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
@@ -97,6 +98,7 @@ func (r *OVNDBClusterReconciler) GetLogger(ctx context.Context) logr.Logger {
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;
 //+kubebuilder:rbac:groups=k8s.cni.cncf.io,resources=network-attachment-definitions,verbs=get;list;watch
 //+kubebuilder:rbac:groups=network.openstack.org,resources=dnsdata,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="operator.openshift.io",resources=dnses,verbs=get;list;watch
 
 // service account, role, rolebinding
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch
@@ -615,7 +617,9 @@ func (r *OVNDBClusterReconciler) reconcileNormal(ctx context.Context, instance *
 
 			// Filter out headless services
 			if svc.Spec.ClusterIP != "None" {
-				internalDbAddress = append(internalDbAddress, fmt.Sprintf("%s:%s.%s.svc.%s:%d", scheme, svc.Name, svc.Namespace, ovnv1.DNSSuffix, svcPort))
+				// TODO: Watch operator.openshift.io resource once cluster domain is customizable
+				clusterDomain := clusterdns.getDNSClusterDomain()
+				internalDbAddress = append(internalDbAddress, fmt.Sprintf("%s:%s.%s.svc.%s:%d", scheme, svc.Name, svc.Namespace, clusterDomain, svcPort))
 			}
 		}
 
