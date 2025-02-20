@@ -14,6 +14,20 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+sleep 3
+
+# Check if we're doing an update
+echo "Check if we're doing an update"
+if [ -f /var/lib/openvswitch/already_executed ]; then
+  while true; do
+      if [ $(cat /var/lib/openvswitch/already_executed) == "OVSDB_SERVER" ]; then
+          break
+      fi
+      sleep 0.1
+  done
+  echo "OVSDBSERVER Already up, start script"
+fi
+
 source $(dirname $0)/functions
 wait_for_ovsdb_server
 
@@ -30,7 +44,7 @@ ovs-vsctl --no-wait set open_vswitch . other_config:flow-restore-wait=true
 
 # It's safe to start vswitchd now. Do it.
 # --detach to allow the execution to continue to restoring the flows.
-/usr/sbin/ovs-vswitchd --pidfile --mlockall --detach
+/usr/sbin/ovs-vswitchd --pidfile --overwrite-pidfile --mlockall --detach
 
 # Restore saved flows.
 if [ -f $FLOWS_RESTORE_SCRIPT ]; then
@@ -48,6 +62,9 @@ cleanup_flows_backup
 
 # Now, inform vswitchd that we are done.
 ovs-vsctl remove open_vswitch . other_config flow-restore-wait
+
+# Set state to "RUNNING"
+echo "RUNNING" > /var/lib/openvswitch/already_executed
 
 # This is container command script. Block it from exiting, otherwise k8s will
 # restart the container again.

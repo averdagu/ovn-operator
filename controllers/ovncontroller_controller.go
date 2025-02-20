@@ -327,11 +327,24 @@ func (r *OVNControllerReconciler) reconcileInit(
 	return ctrl.Result{}, nil
 }
 
-func (r *OVNControllerReconciler) reconcileUpdate(ctx context.Context) (ctrl.Result, error) {
+func (r *OVNControllerReconciler) reconcileUpdate(ctx context.Context, instance *ovnv1.OVNController, helper *helper.Helper, updateOVN *bool, updateOVS *bool) (ctrl.Result, error) {
 	Log := r.GetLogger(ctx)
 
 	Log.Info("Reconciling Service update")
+	Log.Info("Check if image changed")
 
+	desiredOVSImage := instance.Spec.OvsContainerImage
+	ds, err := daemonset.GetDaemonSetWithName(ctx, helper, ovnv1.ServiceNameOVS, instance.Namespace)
+	if err != nil {
+		Log.Info("Error getting ds")
+	}
+	currentOVSImage := ds.Spec.Template.Spec.Containers[0].Image
+
+	Log.Info(fmt.Sprintf("Wanted image %s current image %s", desiredOVSImage, currentOVSImage))
+	if desiredOVSImage != currentOVSImage {
+		*updateOVS = true
+		Log.Info("Need to update OVS daemonset")
+	}
 	Log.Info("Reconciled Service update successfully")
 	return ctrl.Result{}, nil
 }
@@ -549,12 +562,15 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	}
 
 	// Handle service update
-	ctrlResult, err = r.reconcileUpdate(ctx)
+	updateOVSDS := false
+	updateOVNDS := false
+	ctrlResult, err = r.reconcileUpdate(ctx, instance, helper, &updateOVNDS, &updateOVSDS)
 	if err != nil {
 		return ctrlResult, err
 	} else if (ctrlResult != ctrl.Result{}) {
 		return ctrlResult, nil
 	}
+	Log.Info(fmt.Sprintf("AVERDAGU AFTER RECONCILE UPDATE: %v", updateOVSDS))
 
 	// Handle service upgrade
 	ctrlResult, err = r.reconcileUpgrade(ctx)
@@ -612,9 +628,17 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	instance.Status.DesiredNumberScheduled = dset.GetDaemonSet().Status.DesiredNumberScheduled
 	instance.Status.NumberReady = dset.GetDaemonSet().Status.NumberReady
 
+	envVars := map[string]env.Setter{}
+	if updateOVSDS {
+		// This currently is not ideal as first time it reconciles will have the isUpdate value
+		// but if for some reason get's reconciled again, it won't happen
+		envVars["isUpdate"] = env.SetValue("True")
+		Log.Info(fmt.Sprintf("AVERDAGU - Is currently updating: %v", envVars))
+	}
+
 	// Define a new DaemonSet object for OVS (ovsdb-server + ovs-vswitchd)
 	ovsdset := daemonset.NewDaemonSet(
-		ovncontroller.CreateOVSDaemonSet(instance, inputHash, ovsServiceLabels, serviceAnnotations, topology),
+		ovncontroller.CreateOVSDaemonSet(instance, inputHash, ovsServiceLabels, serviceAnnotations, topology, envVars, ctx),
 		time.Duration(5)*time.Second,
 	)
 
@@ -634,6 +658,11 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 			condition.SeverityInfo,
 			condition.DeploymentReadyRunningMessage))
 		return ctrlResult, nil
+	}
+
+	if updateOVSDS {
+		Log.Info(fmt.Sprintf("AVERDAGU - Currently in the middle of an update, wait 20 seconds: %v", envVars))
+		return ctrl.Result{Requeue: true, RequeueAfter: 20 * time.Second}, nil
 	}
 
 	instance.Status.OVSNumberReady = ovsdset.GetDaemonSet().Status.NumberReady

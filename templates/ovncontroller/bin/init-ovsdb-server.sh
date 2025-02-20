@@ -14,19 +14,38 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+# Configs are obtained from ENV variables
+isUpdate=${isUpdate:-"false"}
+
 set -ex
 source $(dirname $0)/functions
 trap wait_for_db_creation EXIT
+
+sleep 3
 
 # If db file is empty, remove it; otherwise service won't start.
 # See https://issues.redhat.com/browse/FDP-689 for more details.
 if ! [ -s ${DB_FILE} ]; then
     rm -f ${DB_FILE}
 fi
+
+# Check if file is created, if not means it's first execution
+if [ -f /var/lib/openvswitch/already_executed ]; then
+  # File is created, no need to run ovs-ctl
+  # Change state to "UPDATE"
+  echo "UPDATE" > /var/lib/openvswitch/already_executed
+  exit 0
+fi
+
 # Initialize or upgrade database if needed
 CTL_ARGS="--system-id=random --no-ovs-vswitchd"
 /usr/share/openvswitch/scripts/ovs-ctl start $CTL_ARGS
 /usr/share/openvswitch/scripts/ovs-ctl stop $CTL_ARGS
+
+if [ ! -f /var/lib/openvswitch/already_executed ]; then
+  # If file was not present, set status INIT
+  echo "INIT" > /var/lib/openvswitch/already_executed
+fi
 
 wait_for_db_creation
 trap - EXIT

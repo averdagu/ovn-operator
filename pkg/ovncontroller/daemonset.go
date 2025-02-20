@@ -13,7 +13,10 @@ limitations under the License.
 package ovncontroller
 
 import (
+	"context"
 	"fmt"
+
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
@@ -24,6 +27,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 )
 
@@ -176,7 +180,10 @@ func CreateOVSDaemonSet(
 	labels map[string]string,
 	annotations map[string]string,
 	topology *topologyv1.Topology,
+	envVars map[string]env.Setter,
+	ctx context.Context,
 ) *appsv1.DaemonSet {
+	log.FromContext(ctx).WithName("Controllers").WithName("OVNController").Info(fmt.Sprintf("INSIDE CREATE: envVars: %v", envVars))
 	//
 	// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
 	//
@@ -233,8 +240,8 @@ func CreateOVSDaemonSet(
 	runAsUser := int64(0)
 	privileged := true
 
-	envVars := map[string]env.Setter{}
 	envVars["CONFIG_HASH"] = env.SetValue(configHash)
+	log.FromContext(ctx).WithName("Controllers").WithName("OVNController").Info(fmt.Sprintf("INSIDE CREATE after configHash: envVars: %v", envVars))
 
 	initContainers := []corev1.Container{
 		{
@@ -327,9 +334,17 @@ func CreateOVSDaemonSet(
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: instance.RbacResourceName(),
+					HostPID:            true,
 					InitContainers:     initContainers,
 					Containers:         containers,
 					Volumes:            GetOVSVolumes(instance.Name, instance.Namespace),
+				},
+			},
+			UpdateStrategy: appsv1.DaemonSetUpdateStrategy{
+				Type: appsv1.RollingUpdateDaemonSetStrategyType,
+				RollingUpdate: &appsv1.RollingUpdateDaemonSet{
+					MaxSurge:       ptr.To(intstr.FromInt(1)),
+					MaxUnavailable: ptr.To(intstr.FromInt(0)),
 				},
 			},
 		},
