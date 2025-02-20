@@ -13,7 +13,10 @@ limitations under the License.
 package ovncontroller
 
 import (
+	"context"
 	"fmt"
+
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/env"
@@ -24,6 +27,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 )
 
@@ -176,7 +180,10 @@ func CreateOVSDaemonSet(
 	labels map[string]string,
 	annotations map[string]string,
 	topology *topologyv1.Topology,
+	envVars map[string]env.Setter,
+	ctx context.Context,
 ) *appsv1.DaemonSet {
+	log.FromContext(ctx).WithName("Controllers").WithName("OVNController").Info(fmt.Sprintf("INSIDE CREATE: envVars: %v", envVars))
 	//
 	// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
 	//
@@ -233,8 +240,29 @@ func CreateOVSDaemonSet(
 	runAsUser := int64(0)
 	privileged := true
 
-	envVars := map[string]env.Setter{}
 	envVars["CONFIG_HASH"] = env.SetValue(configHash)
+	log.FromContext(ctx).WithName("Controllers").WithName("OVNController").Info(fmt.Sprintf("INSIDE CREATE after configHash: envVars: %v", envVars))
+
+	volumes := []corev1.Volume{}
+	mounts := []corev1.VolumeMount{}
+
+	// add OVN dbs cert and CA
+	if instance.Spec.TLS.Enabled() {
+		svc := tls.Service{
+			SecretName: *instance.Spec.TLS.GenericService.SecretName,
+			CertMount:  ptr.To(ovn_common.OVNDbCertPath),
+			KeyMount:   ptr.To(ovn_common.OVNDbKeyPath),
+			CaMount:    ptr.To(ovn_common.OVNDbCaCertPath),
+		}
+		volumes = append(volumes, svc.CreateVolume(ovnv1.ServiceNameOVNController))
+		mounts = append(mounts, svc.CreateVolumeMounts(ovnv1.ServiceNameOVNController)...)
+
+		// add CA bundle if defined
+		if instance.Spec.TLS.CaBundleSecretName != "" {
+			volumes = append(volumes, instance.Spec.TLS.CreateVolume())
+			mounts = append(mounts, instance.Spec.TLS.CreateVolumeMounts(nil)...)
+		}
+	}
 
 	initContainers := []corev1.Container{
 		{
@@ -250,7 +278,7 @@ func CreateOVSDaemonSet(
 				Privileged: &privileged,
 			},
 			Env:          env.MergeEnvs([]corev1.EnvVar{}, envVars),
-			VolumeMounts: GetOVSDbVolumeMounts(),
+			VolumeMounts: append(GetOVSDbVolumeMounts(), mounts...),
 		},
 	}
 
@@ -276,7 +304,7 @@ func CreateOVSDaemonSet(
 				Privileged: &privileged,
 			},
 			Env:          env.MergeEnvs([]corev1.EnvVar{}, envVars),
-			VolumeMounts: GetOVSDbVolumeMounts(),
+			VolumeMounts: append(GetOVSDbVolumeMounts(), mounts...),
 			// TODO: consider the fact that resources are now double booked
 			Resources:                instance.Spec.Resources,
 			LivenessProbe:            ovsDbLivenessProbe,
@@ -303,7 +331,7 @@ func CreateOVSDaemonSet(
 				Privileged: &privileged,
 			},
 			Env:          env.MergeEnvs([]corev1.EnvVar{}, envVars),
-			VolumeMounts: GetVswitchdVolumeMounts(),
+			VolumeMounts: append(GetVswitchdVolumeMounts(), mounts...),
 			// TODO: consider the fact that resources are now double booked
 			Resources:                instance.Spec.Resources,
 			LivenessProbe:            ovsVswitchdLivenessProbe,
@@ -311,6 +339,9 @@ func CreateOVSDaemonSet(
 			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 		},
 	}
+
+	maxUnavailable := intstr.FromInt32(0)
+	maxSurge := intstr.FromInt32(1)
 
 	daemonset := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -327,9 +358,17 @@ func CreateOVSDaemonSet(
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: instance.RbacResourceName(),
+					HostPID:            true,
 					InitContainers:     initContainers,
 					Containers:         containers,
-					Volumes:            GetOVSVolumes(instance.Name, instance.Namespace),
+					Volumes:            append(GetOVSVolumes(instance.Name, instance.Namespace), volumes...),
+				},
+			},
+			UpdateStrategy: appsv1.DaemonSetUpdateStrategy{
+				Type: appsv1.RollingUpdateDaemonSetStrategyType,
+				RollingUpdate: &appsv1.RollingUpdateDaemonSet{
+					MaxUnavailable: &maxUnavailable,
+					MaxSurge:       &maxSurge,
 				},
 			},
 		},
