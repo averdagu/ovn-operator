@@ -14,6 +14,9 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+# Configs are obtained from ENV variables
+isUpdate=${isUpdate:-"false"}
+
 set -ex
 source $(dirname $0)/functions
 trap wait_for_db_creation EXIT
@@ -23,6 +26,13 @@ trap wait_for_db_creation EXIT
 if ! [ -s ${DB_FILE} ]; then
     rm -f ${DB_FILE}
 fi
+
+# Check if file is created, if not means it's first execution
+if [ -f /var/lib/openvswitch/already_executed ]; then
+  # File is created, no need to run ovs-ctl
+  exit 0
+fi
+
 # Initialize or upgrade database if needed
 CTL_ARGS="--system-id=random --no-ovs-vswitchd"
 /usr/share/openvswitch/scripts/ovs-ctl start $CTL_ARGS
