@@ -236,6 +236,27 @@ func CreateOVSDaemonSet(
 	envVars := map[string]env.Setter{}
 	envVars["CONFIG_HASH"] = env.SetValue(configHash)
 
+	volumes := []corev1.Volume{}
+	mounts := []corev1.VolumeMount{}
+
+	// add OVN dbs cert and CA
+	if instance.Spec.TLS.Enabled() {
+		svc := tls.Service{
+			SecretName: *instance.Spec.TLS.GenericService.SecretName,
+			CertMount:  ptr.To(ovn_common.OVNDbCertPath),
+			KeyMount:   ptr.To(ovn_common.OVNDbKeyPath),
+			CaMount:    ptr.To(ovn_common.OVNDbCaCertPath),
+		}
+		volumes = append(volumes, svc.CreateVolume(ovnv1.ServiceNameOVNController))
+		mounts = append(mounts, svc.CreateVolumeMounts(ovnv1.ServiceNameOVNController)...)
+
+		// add CA bundle if defined
+		if instance.Spec.TLS.CaBundleSecretName != "" {
+			volumes = append(volumes, instance.Spec.TLS.CreateVolume())
+			mounts = append(mounts, instance.Spec.TLS.CreateVolumeMounts(nil)...)
+		}
+	}
+
 	initContainers := []corev1.Container{
 		{
 			Name:    "ovsdb-server-init",
@@ -250,7 +271,7 @@ func CreateOVSDaemonSet(
 				Privileged: &privileged,
 			},
 			Env:          env.MergeEnvs([]corev1.EnvVar{}, envVars),
-			VolumeMounts: GetOVSDbVolumeMounts(),
+			VolumeMounts: append(GetOVSDbVolumeMounts(), mounts...),
 		},
 	}
 
@@ -276,7 +297,7 @@ func CreateOVSDaemonSet(
 				Privileged: &privileged,
 			},
 			Env:          env.MergeEnvs([]corev1.EnvVar{}, envVars),
-			VolumeMounts: GetOVSDbVolumeMounts(),
+			VolumeMounts: append(GetOVSDbVolumeMounts(), mounts...),
 			// TODO: consider the fact that resources are now double booked
 			Resources:                instance.Spec.Resources,
 			LivenessProbe:            ovsDbLivenessProbe,
@@ -303,7 +324,7 @@ func CreateOVSDaemonSet(
 				Privileged: &privileged,
 			},
 			Env:          env.MergeEnvs([]corev1.EnvVar{}, envVars),
-			VolumeMounts: GetVswitchdVolumeMounts(),
+			VolumeMounts: append(GetVswitchdVolumeMounts(), mounts...),
 			// TODO: consider the fact that resources are now double booked
 			Resources:                instance.Spec.Resources,
 			LivenessProbe:            ovsVswitchdLivenessProbe,
@@ -329,7 +350,7 @@ func CreateOVSDaemonSet(
 					ServiceAccountName: instance.RbacResourceName(),
 					InitContainers:     initContainers,
 					Containers:         containers,
-					Volumes:            GetOVSVolumes(instance.Name, instance.Namespace),
+					Volumes:            append(GetOVSVolumes(instance.Name, instance.Namespace), volumes...),
 				},
 			},
 		},
