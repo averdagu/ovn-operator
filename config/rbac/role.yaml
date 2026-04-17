@@ -53,6 +53,7 @@ rules:
   - list
   - patch
   - update
+  - watch
 - apiGroups:
   - batch
   resources:
