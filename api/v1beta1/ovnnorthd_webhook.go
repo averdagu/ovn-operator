@@ -48,7 +48,7 @@ func SetupOVNNorthdDefaults(defaults OVNNorthdDefaults) {
 	ovndbclusterlog.Info("OVNNorthd defaults initialized", "defaults", defaults)
 }
 
-// Default implements webhook.Defaulter so a webhook will be registered for the type
+// Default sets default values for the OVNNorthd resource
 func (r *OVNNorthd) Default() {
 	ovnnorthdlog.Info("default", "name", r.Name)
 
@@ -71,7 +71,7 @@ func (spec *OVNNorthdSpecCore) Default() {
 	// nothing here yet
 }
 
-// ValidateCreate implements webhook.Validator so a webhook will be registered for the type
+// ValidateCreate validates the OVNNorthd resource on creation
 func (r *OVNNorthd) ValidateCreate() (admission.Warnings, error) {
 	ovnnorthdlog.Info("validate create", "name", r.Name)
 

@@ -49,7 +49,7 @@ func SetupOVNDBClusterDefaults(defaults OVNDBClusterDefaults) {
 	ovndbclusterlog.Info("OVNDBCluster defaults initialized", "defaults", defaults)
 }
 
-// Default implements webhook.Defaulter so a webhook will be registered for the type
+// Default sets default values for the OVNDBCluster resource
 func (r *OVNDBCluster) Default() {
 	ovndbclusterlog.Info("default", "name", r.Name)
 
@@ -76,7 +76,7 @@ func (spec *OVNDBClusterSpecCore) Default() {
 	// nothing here yet
 }
 
-// ValidateCreate implements webhook.Validator so a webhook will be registered for the type
+// ValidateCreate validates the OVNDBCluster resource on creation
 func (r *OVNDBCluster) ValidateCreate() (admission.Warnings, error) {
 	ovndbclusterlog.Info("validate create", "name", r.Name)
 

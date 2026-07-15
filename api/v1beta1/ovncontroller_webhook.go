@@ -43,7 +43,7 @@ func SetupOVNControllerDefaults(defaults OVNControllerDefaults) {
 	ovncontrollerlog.Info("OVNController defaults initialized", "defaults", defaults)
 }
 
-// Default implements webhook.Defaulter so a webhook will be registered for the type
+// Default sets default values for the OVNController resource
 func (r *OVNController) Default() {
 	ovncontrollerlog.Info("default", "name", r.Name)
 
@@ -69,7 +69,7 @@ func (spec *OVNControllerSpecCore) Default() {
 	// nothing here yet
 }
 
-// ValidateCreate implements webhook.Validator so a webhook will be registered for the type
+// ValidateCreate validates the OVNController resource on creation
 func (r *OVNController) ValidateCreate() (admission.Warnings, error) {
 	ovncontrollerlog.Info("validate create", "name", r.Name)
 	errors := field.ErrorList{}
