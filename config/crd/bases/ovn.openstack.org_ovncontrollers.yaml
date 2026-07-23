@@ -166,6 +166,10 @@ spec:
                 description: Image used for the ovsdb-server and ovs-vswitchd containers
                   (will be set to environmental default if empty)
                 type: string
+              ovsContainerUpdateImage:
+                description: Image used for the update of ovsdb-server and ovs-vswitchd
+                  containers (will be set to environmental default if empty)
+                type: string
               ovsLogLevel:
                 default: info
                 description: OVSLogLevel - Set log level off, emer, err, warn, info
@@ -270,6 +274,7 @@ spec:
             required:
             - ovnContainerImage
             - ovsContainerImage
+            - ovsContainerUpdateImage
             type: object
           status:
             description: OVNControllerStatus defines the observed state of OVNController

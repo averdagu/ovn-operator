@@ -40,6 +40,7 @@ func SetupDefaults() {
 	// Acquire environmental defaults and initialize OVNController defaults with them
 	ovnControllerDefaults := OVNControllerDefaults{
 		OVSContainerImageURL:           util.GetEnvVar("RELATED_IMAGE_OVN_CONTROLLER_OVS_IMAGE_URL_DEFAULT", OVNControllerOVSContainerImage),
+		OVSContainerUpdateImageURL:     util.GetEnvVar("RELATED_IMAGE_OVN_CONTROLLER_OVS_UPDATE_IMAGE_URL_DEFAULT", OVNControllerOVSContainerUpdateImage),
 		OVNControllerContainerImageURL: util.GetEnvVar("RELATED_IMAGE_OVN_CONTROLLER_IMAGE_URL_DEFAULT", OVNControllerContainerImage),
 		ExporterImageURL:               util.GetEnvVar("RELATED_IMAGE_OPENSTACK_NETWORK_EXPORTER_IMAGE_URL_DEFAULT", OpenstackNetworkExporterImage),
 	}

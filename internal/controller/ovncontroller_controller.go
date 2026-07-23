@@ -692,6 +692,56 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 		return ctrlResult, nil
 	}
 
+	// Create job to update ovsdset
+	jobsUpdateDef, err := ovncontroller.UpdateJob(ctx, r.Client, instance, ovnServiceLabels)
+	if err != nil {
+		Log.Error(err, "Failed to create OVS controller update Job")
+		return ctrl.Result{}, err
+	}
+	Log.Info(fmt.Sprintf("ARNAU - creating jobs"))
+	for _, jobDef := range jobsUpdateDef {
+		updateHashKey := ovnv1.OVNUpdateHash + "-" + jobDef.Spec.Template.Spec.NodeName
+		updateHash := instance.Status.Hash[updateHashKey]
+		updateJob := job.NewJob(
+			jobDef,
+			updateHashKey,
+			false,
+			time.Duration(5)*time.Second,
+			updateHash,
+		)
+		ctrlResult, err = updateJob.DoJob(ctx, helper)
+		if (ctrlResult != ctrl.Result{}) {
+			// TODO: set correct condition
+			instance.Status.Conditions.Set(
+				condition.FalseCondition(
+					condition.ServiceConfigReadyCondition,
+					condition.RequestedReason,
+					condition.SeverityInfo,
+					condition.ServiceConfigReadyMessage,
+				),
+			)
+			return ctrlResult, nil
+		}
+		if err != nil {
+			Log.Error(err, "Failed to update OVS controller")
+			// TODO: set correct condition
+			instance.Status.Conditions.Set(
+				condition.FalseCondition(
+					condition.ServiceConfigReadyCondition,
+					condition.RequestedReason,
+					condition.SeverityInfo,
+					condition.ServiceConfigReadyErrorMessage,
+					err.Error(),
+				),
+			)
+			return ctrl.Result{}, err
+		}
+		if updateJob.HasChanged() {
+			instance.Status.Hash[updateHashKey] = updateJob.GetHash()
+			Log.Info(fmt.Sprintf("Job %s hash added - %s", jobDef.Name, instance.Status.Hash[updateHashKey]))
+		}
+	}
+
 	instance.Status.OVSNumberReady = ovsdset.GetDaemonSet().Status.NumberReady
 
 	// verify if network attachment matches expectations

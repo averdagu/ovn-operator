@@ -17,18 +17,21 @@ limitations under the License.
 package v1beta1
 
 import (
-	"k8s.io/apimachinery/pkg/util/validation/field"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/tls"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 
+	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	topologyv1 "github.com/openstack-k8s-operators/infra-operator/apis/topology/v1beta1"
 )
 
 const (
 	// OVNConfigHash - OVNConfigHash key
 	OVNConfigHash = "OvnConfigHash"
+
+	// OVNUpdateHash - OVNUpdateHash key
+	OVNUpdateHash = "OvnUpdateHash"
 
 	// Container image fall-back defaults
 
@@ -36,6 +39,8 @@ const (
 	OVNControllerOVSContainerImage = "quay.io/podified-antelope-centos9/openstack-ovn-base:current-podified"
 	// OVNControllerContainerImage is the fall-back container image for OVNController ovn-controller
 	OVNControllerContainerImage = "quay.io/podified-antelope-centos9/openstack-ovn-controller:current-podified"
+	// OVNControllerContainerImage is the fall-back container image for OVNController ovn-controller
+	OVNControllerOVSContainerUpdateImage = "quay.io/averdagu/openstack-ovn-update:current-podified"
 
 	// ServiceNameOVNController - ovn-controller service name
 	ServiceNameOVNController = "ovn-controller"
@@ -53,6 +58,10 @@ type OVNControllerSpec struct {
 	// +kubebuilder:validation:Required
 	// Image used for the ovsdb-server and ovs-vswitchd containers (will be set to environmental default if empty)
 	OvsContainerImage string `json:"ovsContainerImage"`
+
+	// +kubebuilder:validation:Required
+	// Image used for the update of ovsdb-server and ovs-vswitchd containers (will be set to environmental default if empty)
+	OvsContainerUpdateImage string `json:"ovsContainerUpdateImage"`
 
 	// +kubebuilder:validation:Required
 	// Image used for the ovn-controller container (will be set to environmental default if empty)
@@ -220,7 +229,7 @@ type OVSExternalIDs struct {
 	OvnAvailabilityZones []string `json:"availability-zones,omitempty"`
 
 	// DEPRECATED: To be removed in the next API version
-        // Any value set to this field is ignored
+	// Any value set to this field is ignored
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=true
 	EnableChassisAsGateway *bool `json:"enable-chassis-as-gateway"`
