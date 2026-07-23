@@ -158,6 +158,31 @@ func GetOVSVolumes(name string, namespace string) []corev1.Volume {
 
 }
 
+// GetOVSUpdateVolumeMount - ovsdb-server + ovs-vswitchd UpdateVolumeMounts
+func GetOVSUpdateVolumeMount() []corev1.VolumeMount {
+	return []corev1.VolumeMount{
+		{
+			Name:      "update-shared",
+			MountPath: "/usr/update",
+		},
+	}
+}
+
+// GetOVSUpdateVolume - ovsdb-server + ovs-vswitchd UpdateVolume
+func GetOVSUpdateVolume() []corev1.Volume {
+	return []corev1.Volume{
+		{
+			name: volumeName,
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: "/usr/ovn/update",
+					Type: &HostPathType,
+				},
+			},
+		},
+	}
+}
+
 // GetOVSDbVolumeMounts - ovsdb-server VolumeMounts
 func GetOVSDbVolumeMounts() []corev1.VolumeMount {
 	return []corev1.VolumeMount{

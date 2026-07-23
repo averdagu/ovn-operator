@@ -279,7 +279,7 @@ func CreateOVSDaemonSet(
 				Privileged: &privileged,
 			},
 			Env:          env.MergeEnvs([]corev1.EnvVar{}, envVars),
-			VolumeMounts: GetOVSDbVolumeMounts(),
+			VolumeMounts: append(GetOVSDbVolumeMounts(), GetOVSUpdateVolumeMount()...),
 			// TODO: consider the fact that resources are now double booked
 			Resources:                instance.Spec.Resources,
 			LivenessProbe:            ovsDbLivenessProbe,
@@ -306,7 +306,7 @@ func CreateOVSDaemonSet(
 				Privileged: &privileged,
 			},
 			Env:          env.MergeEnvs([]corev1.EnvVar{}, envVars),
-			VolumeMounts: GetVswitchdVolumeMounts(),
+			VolumeMounts: append(GetVswitchdVolumeMounts(), GetOVSUpdateVolumeMount()...),
 			// TODO: consider the fact that resources are now double booked
 			Resources:                instance.Spec.Resources,
 			LivenessProbe:            ovsVswitchdLivenessProbe,
@@ -324,6 +324,10 @@ func CreateOVSDaemonSet(
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
 			},
+			// Set the Update Strategy type specifically to OnDelete
+			UpdateStrategy: appsv1.DaemonSetUpdateStrategy{
+				Type: appsv1.OnDeleteDaemonSetStrategyType,
+			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: labels,
@@ -332,7 +336,7 @@ func CreateOVSDaemonSet(
 					ServiceAccountName: instance.RbacResourceName(),
 					InitContainers:     initContainers,
 					Containers:         containers,
-					Volumes:            GetOVSVolumes(instance.Name, instance.Namespace),
+					Volumes:            append(GetOVSVolumes(instance.Name, instance.Namespace), GetOVSUpdateVolume()...),
 				},
 			},
 		},
