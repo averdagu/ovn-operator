@@ -36,6 +36,9 @@ const (
 	// OVSInputHash
 	OVSInputHash = "OvsInputHash"
 
+	// OVSUpdate
+	OVSUpdate = "OvsUpdate"
+
 	// Container image fall-back defaults
 
 	// OVNControllerOVSContainerImage is the fall-back container image for OVNController ovs-*
