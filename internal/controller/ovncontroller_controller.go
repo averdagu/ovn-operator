@@ -675,9 +675,27 @@ func (r *OVNControllerReconciler) reconcileNormal(ctx context.Context, instance 
 	instance.Status.DesiredNumberScheduled = dset.GetDaemonSet().Status.DesiredNumberScheduled
 	instance.Status.NumberReady = dset.GetDaemonSet().Status.NumberReady
 
+	// (averdagu) Set new stablished hash for OVS daemonset (netAttach + NicMappings)
+	// Since ovs-controller daemonset has been updated to onDelete strategy
+	// it won't automatically recreate the pod on CR update, this works when
+	// the image is changed (as it's responsability of the user to delete the
+	// running pods so change takes place) but it needs to restart the containers
+	// if either networkAttachments or NicMappings had been changed, adding
+	// a new Hash to know whenever these values had been changed to delete the pods.
+	networkChangeHashData := map[string]interface{}{
+		"networkAttachments": instance.Spec.NetworkAttachment,
+		"nicMappings":        instance.Spec.NicMappings,
+		"bondConfig":         instance.Spec.BondConfiguration,
+	}
+	networkHash, netErr := util.ObjectHash(networkChangeHashData)
+
+	// Check if networkHash changed
+	networkHash, netHashChange, netErr := r.createHashOfNetworkHashes(ctx, r.Client, instance, networkChangeHashData, "")
+	Log.Info(fmt.Sprintf("%s, %t, %s", networkHash, netHashChange, netErr))
+
 	// Define a new DaemonSet object for OVS (ovsdb-server + ovs-vswitchd)
 	ovsdset := daemonset.NewDaemonSet(
-		ovncontroller.CreateOVSDaemonSet(instance, OVSinputHash, ovsServiceLabels, serviceAnnotations, topology),
+		ovncontroller.CreateOVSDaemonSet(instance, OVSinputHash, networkHash, ovsServiceLabels, serviceAnnotations, topology),
 		time.Duration(5)*time.Second,
 	)
 
@@ -1009,6 +1027,43 @@ func (r *OVNControllerReconciler) createHashOfInputHashes(
 		Log.Info(fmt.Sprintf("Input maps hash %s - %s", hashkey, hash))
 	}
 	return hash, changed, nil
+}
+
+// createHashOfInputHashes - creates a hash of hashes which gets added to the resources which requires a restart
+// if any of the input resources change, like configs, passwords, ...
+//
+// returns the hash, whether the hash changed (as a bool) and any error
+func (r *OVNControllerReconciler) createHashOfNetworkHashes(
+	ctx context.Context,
+	k8sClient client.Client,
+	instance *ovnv1.OVNController,
+	netVars map[string]interface{},
+	hashkey string,
+) (string, bool, error) {
+	Log := r.GetLogger(ctx)
+
+	networkHash, netErr := util.ObjectHash(netVars)
+	changed := false
+	if netErr != nil {
+		return networkHash, changed, netErr
+	}
+	// Get all current network hashes from all ovn-controller-ovs pods
+	podList, err := ovncontroller.GetOVSControllerPods(ctx, k8sClient, instance)
+	if err != nil {
+		return networkHash, changed, err
+	}
+	for _, ovsPod := range podList.Items {
+		for _, podEnv := range ovsPod.Spec.Containers[0].Env {
+			if podEnv.Name == "NETWORK_HASH" {
+				Log.Info(fmt.Sprintf("ARNAU - Network hash: %s", podEnv.Value))
+			}
+		}
+	}
+	//if hashMap, changed = util.SetHash(instance.Status.Hash, hashkey, hash); changed {
+	//	instance.Status.Hash = hashMap
+	//	Log.Info(fmt.Sprintf("Input maps hash %s - %s", hashkey, hash))
+	//}
+	return networkHash, changed, nil
 }
 
 // createMetricsHashOfInputHashes - creates a metrics-specific hash of hashes for the metrics daemonset
