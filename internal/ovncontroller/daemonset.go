@@ -309,8 +309,19 @@ func CreateOVSDaemonSet(
 		},
 	}
 
+
+	if daemonset.Spec.Template.Spec.NodeSelector == nil {
+	    daemonset.Spec.Template.Spec.NodeSelector = make(map[string]string)
+	}
+
+	// 1. Set required operational label
+	daemonset.Spec.Template.Spec.NodeSelector["ovncontroller-working"] = "true"
+
+	// 2. Merge additional node selectors from CR spec
 	if instance.Spec.NodeSelector != nil {
-		daemonset.Spec.Template.Spec.NodeSelector = *instance.Spec.NodeSelector
+	    for key, value := range instance.Spec.NodeSelector {
+	        daemonset.Spec.Template.Spec.NodeSelector[key] = value
+	    }
 	}
 	// DaemonSet automatically place one Pod per node that matches the
 	// node selector, but topology spread constraints and PodAffinity/PodAntiaffinity
